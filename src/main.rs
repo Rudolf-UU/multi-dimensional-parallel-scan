@@ -5,17 +5,17 @@ mod utils;
 use std::{path::Path, io::stdin};
 
 fn main() {
-  let cpp_enabled = setup_cpp();
+  let cpp_enabled = false; //setup_cpp();
 
   if !cpp_enabled {
     println!("Running the benchmarks without the C++ and oneTBB implementations.");
   }
 
   cases::scan::run(cpp_enabled);
-  cases::scan::run_inplace(cpp_enabled);
-  cases::scan_ratio::run(cpp_enabled, false);
-  cases::scan_ratio::run(cpp_enabled, true);
-  cases::compact::run(cpp_enabled);
+  //cases::scan::run_inplace(cpp_enabled);
+  //cases::scan_ratio::run(cpp_enabled, false);
+  //cases::scan_ratio::run(cpp_enabled, true);
+  //cases::compact::run(cpp_enabled);
 }
 
 // Utilities to install and build the c++ and oneTBB implementation.

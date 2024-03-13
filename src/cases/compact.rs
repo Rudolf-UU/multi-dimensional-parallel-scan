@@ -32,7 +32,7 @@ pub fn run(cpp_enabled: bool) {
           &name,
           || {},
           || reference_sequential_single(mask, &input, &output),
-          24,
+          8,
           6
         )
         .parallel("Scan-then-propagate", 3, Some(13), false, || {}, |thread_count| {

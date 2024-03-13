@@ -1,4 +1,5 @@
 use core::sync::atomic::{Ordering, AtomicU64};
+use std::ops::Div;
 use num_format::{Locale, ToFormattedString};
 use crate::core::worker::*;
 use crate::utils;
@@ -10,6 +11,8 @@ pub mod our_reduce_then_scan;
 pub mod our_scan_then_propagate;
 mod reduce_then_scan;
 mod scan_then_propagate;
+mod multi_chained;
+mod parallel_rowbased;
 
 pub const SIZE: usize = 1024 * 1024 * 64;
 
@@ -19,42 +22,61 @@ pub fn run(cpp_enabled: bool) {
     let input = unsafe { utils::array::alloc_undef_u64_array(size) };
     let output = unsafe { utils::array::alloc_undef_u64_array(size) };
     fill(&input);
+
+    let temp2 = multi_chained::create_temp();
+    let temp3 = parallel_rowbased::create_temp();
+    let shape2 = [256, 64, 1024]; //[2, 3, 4, 2, 6]
+    let input2 = unsafe { utils::array::MultArray::new(shape2) };
+    let output2 = unsafe { utils::array::MultArray::new(shape2) };
+    mult_fill(&input2);
+
     let name = "Prefix-sum (n = ".to_owned() + &(size).to_formatted_string(&Locale::en) + ")";
     benchmark(
         ChartStyle::WithKey,
         &name,
         || {},
-        || { reference_sequential_single(&input, &output) }
+        || { reference_sequential_single_mult(&input2, &output2) }
+        //|| { reference_sequential_single(&input, &output) } //reference_sequential_single(&input, &output)
       )
-      .parallel("Scan-then-propagate", 3, Some(13), false, || {}, |thread_count| {
-        let task = scan_then_propagate::create_task(&input, &output);
+      // .parallel("Scan-then-propagate", 3, Some(13), false, || {}, |thread_count| {
+      //   // let task = scan_then_propagate::create_task(&input, &output);
+      //   // Workers::run(thread_count, task);
+      //   // compute_output(&output)
+      // })
+      // .parallel("Reduce-then-scan", 5, None, false, || {}, |thread_count| {
+      //   // let task = reduce_then_scan::create_task(&input, &output);
+      //   // Workers::run(thread_count, task);
+      //   // compute_output(&output)
+      // })
+      // .parallel("Chained scan", 7, None, false, || {}, |thread_count| {
+      //   let task = chained::init_single(&input, &temp, &output);
+      //   Workers::run(thread_count, task);
+      //   compute_output(&output)
+      // })
+      // .parallel("Assisted scan-t.-prop.", 2, Some(12), true, || {}, |thread_count| {
+      //   // let task = our_scan_then_propagate::create_task(&input, &output, None);
+      //   // Workers::run(thread_count, task);
+      //   // compute_output(&output)
+      // })
+      // .parallel("Assisted reduce-t.-scan", 4, None, true, || {}, |thread_count| {
+      //   // let task = our_reduce_then_scan::create_task(&input, &output, None);
+      //   // Workers::run(thread_count, task);
+      //   // compute_output(&output)
+      // })
+      // .parallel("Adaptive chained scan", 6, None, true, || {}, |thread_count| {
+      //   let task = our_chained::init_single(&input, &temp, &output);
+      //   Workers::run(thread_count, task);
+      //   compute_output(&output)
+      // })
+      // .parallel("Multidimensional scan", 6, None, true, || {}, |thread_count| {
+      //   let task = multi_chained::init_single(&input2, &temp2, &output2);
+      //   Workers::run(thread_count, task);
+      //   compute_output(&output2.get_data())
+      // })
+      .parallel("Parallel row-based", 6, None, true, || {}, |thread_count| {
+        let task = parallel_rowbased::init_single(&input2, &temp3, &output2);
         Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Reduce-then-scan", 5, None, false, || {}, |thread_count| {
-        let task = reduce_then_scan::create_task(&input, &output);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Chained scan", 7, None, false, || {}, |thread_count| {
-        let task = chained::init_single(&input, &temp, &output);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Assisted scan-t.-prop.", 2, Some(12), true, || {}, |thread_count| {
-        let task = our_scan_then_propagate::create_task(&input, &output, None);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Assisted reduce-t.-scan", 4, None, true, || {}, |thread_count| {
-        let task = our_reduce_then_scan::create_task(&input, &output, None);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Adaptive chained scan", 6, None, true, || {}, |thread_count| {
-        let task = our_chained::init_single(&input, &temp, &output);
-        Workers::run(thread_count, task);
-        compute_output(&output)
+        compute_output(&output2.get_data())
       })
       .cpp_sequential(cpp_enabled, "Reference C++", "scan-sequential", size)
       .cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-tbb", size)
@@ -115,6 +137,19 @@ pub fn fill(values: &[AtomicU64]) {
   }
 }
 
+pub fn mult_fill<const N: usize>(array: &utils::array::MultArray<N>) {
+  let values = array.get_data();
+  for (idx, value) in values.iter().enumerate() {
+    value.store(random(idx as u64) as u64, Ordering::Relaxed);
+  }
+  let dim = array.get_shape();
+  let inner = array.get_inner_size();
+  let count_inner = array.total_inner_count();
+  println!("Shape {:?}", dim);
+  println!("Inner {:?}", inner);
+  println!("Inner count {:?}", count_inner);
+}
+
 pub fn compute_output(output: &[AtomicU64]) -> u64 {
   output[0].load(Ordering::Relaxed) + output[98238].load(Ordering::Relaxed) + output[output.len() - 123].load(Ordering::Relaxed) + output[output.len() - 1].load(Ordering::Relaxed)
 }
@@ -122,6 +157,19 @@ pub fn compute_output(output: &[AtomicU64]) -> u64 {
 pub fn reference_sequential_single(input: &[AtomicU64], output: &[AtomicU64]) -> u64 {
   scan_sequential(input, 0, output);
   compute_output(output)
+}
+
+pub fn reference_sequential_single_mult<const N: usize>(input: &utils::array::MultArray<N>, output: &utils::array::MultArray<N>) -> u64 {
+  let rows = input.total_inner_count();
+  let size = input.get_inner_size();
+  let input_data = input.get_data();
+  let output_data = output.get_data();
+
+  for i in 0 .. rows {
+    scan_sequential(&input_data[i*size .. (i+1)*size], 0, &output_data[i*size .. (i+1)*size]);
+  }
+  
+  compute_output(output_data)
 }
 
 pub fn scan_sequential(input: &[AtomicU64], initial: u64, output: &[AtomicU64]) -> u64 {

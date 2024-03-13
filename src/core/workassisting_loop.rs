@@ -23,6 +23,33 @@ macro_rules! workassisting_loop {
 pub(crate) use workassisting_loop;
 
 #[macro_export]
+macro_rules! workassisting_loop_column_based  {
+    ($loop_arguments_expr: expr, $column_count:ident, |$block_index: ident, $column_index: ident| $body: block) => {
+      let loop_arguments:LoopArguments = $loop_arguments_expr;
+      let work_size: u32 = loop_arguments.work_size;
+      let work_index: &AtomicU32 = loop_arguments.work_index;
+      let mut empty_signal: EmptySignal = loop_arguments.empty_signal;
+      let number:u32 = $column_count;
+
+      loop {
+        let index = work_index.fetch_add(1, Ordering::Relaxed);
+        let row_idx = index & 0xFFFF;
+        let column_idx = index >> 16;
+        let count_claimed = row_idx + (column_idx * number);
+
+        if count_claimed > work_size {
+          empty_signal.task_empty();
+          break;
+        }
+        
+        // if row_idx == row length, then we reset row_idx to 0 and increase column_idx by 1.
+      }
+
+    };
+}
+pub(crate) use workassisting_loop_column_based;
+
+#[macro_export]
 macro_rules! workassisting_loop_two_sided {
   ($loop_arguments_expr: expr, |$block_index_1: ident| $first_thread: block, |$block_index_2: ident| $other_threads: block, |$sequential_count: ident, $parallel_count: ident| $conclude_distribution: block) => {
     // Bind inputs to variables

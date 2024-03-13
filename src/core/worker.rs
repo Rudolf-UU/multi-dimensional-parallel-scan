@@ -11,7 +11,7 @@ pub struct Workers<'a> {
   worker_count: usize,
   worker: deque::Worker<Task>,
   stealers: &'a [deque::Stealer<Task>],
-  activities: &'a [AtomicTaggedPtr<TaskObject<()>>]
+  pub activities: &'a [AtomicTaggedPtr<TaskObject<()>>]
 }
 
 impl<'a> Workers<'a> {
@@ -175,7 +175,7 @@ impl<'a> Workers<'a> {
   // Calls the work function of a task, and calls end_task afterwards
   fn call_task(&self, task: *const TaskObject<()>, signal: EmptySignal, first_index: u32) {
     let task_ref = unsafe { &*task };
-    (task_ref.work.unwrap())(self, task, LoopArguments{ work_size: task_ref.work_size, work_index: &task_ref.work_index, empty_signal: signal, first_index });
+    (task_ref.work.unwrap())(self, task, LoopArguments{ work_size: task_ref.work_size, work_index: &task_ref.work_index, empty_signal: signal, first_index});
     self.end_task(task);
   }
 
