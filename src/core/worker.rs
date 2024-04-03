@@ -11,7 +11,7 @@ pub struct Workers<'a> {
   worker_count: usize,
   worker: deque::Worker<Task>,
   stealers: &'a [deque::Stealer<Task>],
-  pub activities: &'a [AtomicTaggedPtr<TaskObject<()>>]
+  activities: &'a [AtomicTaggedPtr<TaskObject<()>>]
 }
 
 impl<'a> Workers<'a> {

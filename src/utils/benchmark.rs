@@ -15,7 +15,7 @@ pub struct Benchmarker<T> {
 }
 
 pub const THREAD_COUNTS: [usize; 14] = [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32];
-pub const RUNS: usize = 50;
+pub const RUNS: usize = 10;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum ChartStyle {
@@ -24,7 +24,7 @@ pub enum ChartStyle {
 }
 
 pub fn benchmark<T: Debug + Eq, P: FnMut() -> (), Ref: FnMut() -> T>(chart_style: ChartStyle, name: &str, prepare: P, reference: Ref) -> Benchmarker<T> {
-  benchmark_with_max_speedup(chart_style, name, prepare, reference,  8, 6)
+  benchmark_with_max_speedup(chart_style, name, prepare, reference,   24, 2)
 }
 
 pub fn benchmark_with_max_speedup<T: Debug + Eq, P: FnMut() -> (), Ref: FnMut() -> T>(chart_style: ChartStyle, name: &str, prepare: P, reference: Ref, max_threads: u32, max_speedup: u32) -> Benchmarker<T> {

@@ -6,7 +6,7 @@ use crate::core::task::*;
 use crate::core::workassisting_loop::*;
 
 pub const SIZE: usize = crate::cases::scan::SIZE;
-const BLOCK_SIZE: u64 = 1024 * 4;
+pub const BLOCK_SIZE: u64 = 1024 * 4;
 
 pub fn create_temp() -> Box<[BlockInfo]> {
   (0 .. (SIZE as u64 + BLOCK_SIZE - 1) / BLOCK_SIZE).map(|_| BlockInfo{
