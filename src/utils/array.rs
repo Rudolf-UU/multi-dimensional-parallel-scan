@@ -50,12 +50,4 @@ impl<const N: usize> MultArray<N> {
   pub fn get_data(&self) -> &Box<[AtomicU64]> {
     &self.data
   } 
-
-  pub fn get_shape(&self) -> &[usize; N] {
-    &self.shape
-  }
-}
-
-pub struct Shape<I: ?Sized>{
-  index: I,
 }

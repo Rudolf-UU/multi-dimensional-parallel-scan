@@ -6,11 +6,7 @@ use crate::utils;
 use crate::utils::benchmark::{benchmark_with_max_speedup, ChartStyle};
 
 mod chained;
-mod reduce_then_scan;
-mod scan_then_propagate;
 mod our_chained;
-mod our_reduce_then_scan;
-mod our_scan_then_propagate;
 
 pub const SIZE: usize = 1024 * 1024 * 256;
 pub const BLOCK_COUNT: u64 = 32 * 8;
@@ -35,33 +31,9 @@ pub fn run(cpp_enabled: bool) {
           8,
           6
         )
-        .parallel("Scan-then-propagate", 3, Some(13), false, || {}, |thread_count| {
-          let output_count = AtomicUsize::new(0);
-          let task = scan_then_propagate::create_task(mask, &input, &temp1, &output, &output_count);
-          Workers::run(thread_count, task);
-          compute_output(&output, output_count.load(Ordering::Relaxed))
-        })
-        .parallel("Reduce-then-scan", 5, None, false, || {}, |thread_count| {
-          let output_count = AtomicUsize::new(0);
-          let task = reduce_then_scan::create_task(mask, &input, &temp2, &output, &output_count);
-          Workers::run(thread_count, task);
-          compute_output(&output, output_count.load(Ordering::Relaxed))
-        })
         .parallel("Chained scan", 7, None, false, || {}, |thread_count| {
           let output_count = AtomicUsize::new(0);
           let task = chained::create_task(mask, &input, &temp3, &output, &output_count);
-          Workers::run(thread_count, task);
-          compute_output(&output, output_count.load(Ordering::Relaxed))
-        })
-        .parallel("Assisted scan-t.-prop.", 2, Some(12), true, || {}, |thread_count| {
-          let output_count = AtomicUsize::new(0);
-          let task = our_scan_then_propagate::create_task(mask, &input, &temp1, &output, &output_count);
-          Workers::run(thread_count, task);
-          compute_output(&output, output_count.load(Ordering::Relaxed))
-        })
-        .parallel("Assisted reduce-t.-scan", 4, None, true, || {}, |thread_count| {
-          let output_count = AtomicUsize::new(0);
-          let task = our_reduce_then_scan::create_task(mask, &input, &temp2, &output, &output_count);
           Workers::run(thread_count, task);
           compute_output(&output, output_count.load(Ordering::Relaxed))
         })
@@ -71,9 +43,7 @@ pub fn run(cpp_enabled: bool) {
           Workers::run(thread_count, task);
           compute_output(&output, output_count.load(Ordering::Relaxed))
         })
-        .cpp_sequential(cpp_enabled, "Reference C++", &("compact-".to_owned() + &ratio.to_string() + "-sequential"), size)
-        .cpp_tbb(cpp_enabled, "oneTBB", 1, None, &("compact-".to_owned() + &ratio.to_string() + "-tbb"), size)
-        .cpp_parlay(cpp_enabled, "ParlayLib", 8, None, &("compact-".to_owned() + &ratio.to_string() + "-parlay"), size);
+        .cpp_sequential(cpp_enabled, "Reference C++", &("compact-".to_owned() + &ratio.to_string() + "-sequential"), size, size, 1);
     }
   }
 }

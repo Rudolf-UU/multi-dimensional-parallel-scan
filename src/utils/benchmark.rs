@@ -15,7 +15,7 @@ pub struct Benchmarker<T> {
 }
 
 pub const THREAD_COUNTS: [usize; 14] = [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32];
-pub const RUNS: usize = 10;
+pub const RUNS: usize = 50;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum ChartStyle {
@@ -24,7 +24,7 @@ pub enum ChartStyle {
 }
 
 pub fn benchmark<T: Debug + Eq, P: FnMut() -> (), Ref: FnMut() -> T>(chart_style: ChartStyle, name: &str, prepare: P, reference: Ref) -> Benchmarker<T> {
-  benchmark_with_max_speedup(chart_style, name, prepare, reference, 24, 2)
+  benchmark_with_max_speedup(chart_style, name, prepare, reference, 16, 3)
 }
 
 pub fn benchmark_with_max_speedup<T: Debug + Eq, P: FnMut() -> (), Ref: FnMut() -> T>(chart_style: ChartStyle, name: &str, prepare: P, reference: Ref, max_threads: u32, max_speedup: u32) -> Benchmarker<T> {
@@ -54,13 +54,15 @@ impl<T: Copy + Debug + Eq + Send> Benchmarker<T> {
     self
   }
 
-  pub fn cpp_sequential(mut self, cpp_enabled: bool, name: &str, cpp_name: &str, size: usize) -> Self {
+  pub fn cpp_sequential(mut self, cpp_enabled: bool, name: &str, cpp_name: &str, size: usize, row_length: usize, row_count: usize) -> Self {
     if !cpp_enabled { return self; }
 
     let mut command = std::process::Command::new("./reference-cpp/build/main");
     command.env("LD_LIBRARY_PATH", "./reference-cpp/oneTBB-install/lib")
       .arg(cpp_name)
-      .arg(size.to_string());
+      .arg(size.to_string())
+      .arg(row_length.to_string())
+      .arg(row_count.to_string());
 
     let child = command
       .output()
@@ -78,67 +80,6 @@ impl<T: Copy + Debug + Eq + Send> Benchmarker<T> {
     }
 
     self.reference_time_cpp = Some(time);
-
-    self
-  }
-
-  pub fn cpp_tbb(mut self, cpp_enabled: bool, name: &str, chart_line_style: u32, point_type: Option<u32>, cpp_name: &str, size: usize) -> Self {
-    if !cpp_enabled { return self; }
-
-    println!("{}", name);
-    let mut results = vec![];
-    for thread_count in THREAD_COUNTS {
-      if thread_count > self.max_threads as usize {
-        break;
-      }
-
-      let mut command = std::process::Command::new("./reference-cpp/build/main-tbb");
-      command.env("LD_LIBRARY_PATH", "./reference-cpp/oneTBB-install/lib")
-        .arg(cpp_name)
-        .arg(size.to_string())
-        .arg(thread_count.to_string());
-
-      let child = command
-        .output()
-        .expect("Reference oneTBB C++ implementation failed");
-
-      let time_str = String::from_utf8_lossy(&child.stdout);
-      let time: u64 = time_str.trim().parse().expect(&("Unexpected output from reference C++ program: ".to_owned() + &time_str));
-      let relative = self.reference_time as f32 / time as f32;
-      results.push(relative);
-      println!("  {:02} threads {} ms ({:.2}x)", thread_count, time / 1000, relative);
-    }
-    self.output.push((name.to_owned(), chart_line_style, point_type, false, results));
-
-    self
-  }
-
-  pub fn cpp_parlay(mut self, cpp_enabled: bool, name: &str, chart_line_style: u32, point_type: Option<u32>, cpp_name: &str, size: usize) -> Self {
-    if !cpp_enabled { return self; }
-
-    println!("{}", name);
-    let mut results = vec![];
-    for thread_count in THREAD_COUNTS {
-      if thread_count > self.max_threads as usize {
-        break;
-      }
-
-      let mut command = std::process::Command::new("./reference-cpp/build/main-parlaylib");
-      command.env("PARLAY_NUM_THREADS", thread_count.to_string())
-        .arg(cpp_name)
-        .arg(size.to_string());
-
-      let child = command
-        .output()
-        .expect("Reference parlay C++ implementation failed");
-
-      let time_str = String::from_utf8_lossy(&child.stdout);
-      let time: u64 = time_str.trim().parse().expect(&("Unexpected output from reference C++ program: ".to_owned() + &time_str));
-      let relative = self.reference_time as f32 / time as f32;
-      results.push(relative);
-      println!("  {:02} threads {} ms ({:.2}x)", thread_count, time / 1000, relative);
-    }
-    self.output.push((name.to_owned(), chart_line_style, point_type, false, results));
 
     self
   }

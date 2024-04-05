@@ -4,252 +4,146 @@ use crate::core::worker::*;
 use crate::utils;
 use crate::utils::benchmark::{benchmark, ChartStyle};
 
-mod chained;
-mod our_chained;
-pub mod our_reduce_then_scan;
-pub mod our_scan_then_propagate;
-mod reduce_then_scan;
-mod scan_then_propagate;
-mod multi_chained;
+mod zero_overhead;
+mod column_row_chained;
 mod parallel_rowbased;
+mod rowwise_chained;
+mod columnwise_chained;
 
 pub const SIZE: usize = 1024 * 1024 * 64;
 pub const BLOCK_SIZE:u64 = 1024 * 4;
+pub const MULTIDIM_SHAPES:[[usize;2];4] = [[8192, 8192], [2048, 32768], [4, 16777216], [65536,1024]];
 
 pub fn run(cpp_enabled: bool) {
   for size in [SIZE] {
-    let temp = chained::create_temp();
-    let input = unsafe { utils::array::alloc_undef_u64_array(size) };
-    let output = unsafe { utils::array::alloc_undef_u64_array(size) };
-    fill(&input);
+    let input = unsafe { utils::array::MultArray::new([size]) };
+    let output = unsafe { utils::array::MultArray::new([size]) };
+    let temp = column_row_chained::create_temp(&input);
+
+    fill(&input.get_data());
 
     let name = "Prefix-sum (n = ".to_owned() + &(size).to_formatted_string(&Locale::en) + ")";
     benchmark(
         ChartStyle::WithKey,
         &name,
         || {},
-        || { reference_sequential_single(&input, &output) }
+        || { reference_sequential_single(&input.get_data(), &output.get_data()) }
       )
-      .parallel("Adaptive chained scan", 6, None, true, || {}, |thread_count| {
-        let task = our_chained::init_single(&input, &temp, &output);
+      .parallel("Adaptive chained", 7, None, false, || {}, |thread_count| {
+        let task = zero_overhead::init_single(&input.get_data(), &temp, &output.get_data());
         Workers::run(thread_count, task);
-        compute_output(&output)
+        compute_output(&output.get_data())
       })
-      .parallel("Scan-then-propagate", 3, Some(13), false, || {}, |thread_count| {
-        let task = scan_then_propagate::create_task(&input, &output);
+      .parallel("Column-row chained", 6, None, true, || {}, |thread_count| {
+        let task = column_row_chained::init_single(&input, &temp, &output);
         Workers::run(thread_count, task);
-        compute_output(&output)
+        compute_output(&output.get_data())
       })
-      .parallel("Reduce-then-scan", 5, None, false, || {}, |thread_count| {
-        let task = reduce_then_scan::create_task(&input, &output);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Chained scan", 7, None, false, || {}, |thread_count| {
-        let task = chained::init_single(&input, &temp, &output);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Assisted scan-t.-prop.", 2, Some(12), true, || {}, |thread_count| {
-        let task = our_scan_then_propagate::create_task(&input, &output, None);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      .parallel("Assisted reduce-t.-scan", 4, None, true, || {}, |thread_count| {
-        let task = our_reduce_then_scan::create_task(&input, &output, None);
-        Workers::run(thread_count, task);
-        compute_output(&output)
-      })
-      
-      .cpp_sequential(cpp_enabled, "Reference C++", "scan-sequential", size)
-      .cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-tbb", size)
-      .cpp_parlay(cpp_enabled, "ParlayLib", 8, None, "scan-parlay", size);
+      .cpp_sequential(cpp_enabled, "Reference sequential C++", "scan-sequential", size, size, 1);
   }
 }
 
 pub fn run_multidim(cpp_enabled: bool) {
-  for size in [SIZE] {
-    let shape = [1000, 100000]; //[3, 30000000] [10000, 1000] [100000, 1000] [5, 15000000] [10000, 10000] [1300, 100000]
+  for shape in MULTIDIM_SHAPES {
     let input = unsafe { utils::array::MultArray::new(shape) };
     let output = unsafe { utils::array::MultArray::new(shape) };
-    let output2 = unsafe { utils::array::MultArray::new(shape) };
+    let temp = column_row_chained::create_temp(&input);
 
-    let temp = multi_chained::create_temp(&input);
-    // let temp2 = chained::create_temp();
     fill(input.get_data());
 
-    let name = "Prefix-sum (n = ".to_owned() + &(input.get_data().len()).to_formatted_string(&Locale::en) + &format!(" -- {:?}", shape) + ")"; //
+    let name = "Prefix-sum -- m (n = ".to_owned() + &(input.get_data().len()).to_formatted_string(&Locale::en) + &format!(" -- {:?}", shape) + ")"; //
     benchmark(
         ChartStyle::WithKey,
         &name,
         || {},
         || { reference_sequential_multidim(&input, &output) }
       )
-      .parallel("Multidimensional - Columnwise2", 6, None, true, || {}, |thread_count| {
-        let task = multi_chained::init_single(&input, &temp, &output2, 3);
-        Workers::run(thread_count, task);
-        // for i in 1 .. output2.get_data().len() {
-        //   if output2.get_data()[i].load(Ordering::Relaxed) != output.get_data()[i].load(Ordering::Relaxed) {
-        //     println!("some block is skipped :(");
-        //   }
-        // }
-        compute_output(&output2.get_data())
-      })
-      // .parallel("Adaptive chained scan", 5, None, true, || {}, |thread_count| {
-      //   let task = our_chained::init_single(&input.get_data(), &temp2, &output.get_data());
-      //   Workers::run(thread_count, task);
-      //   compute_output(&output.get_data())
-      // })
-      .parallel("Multidimensional - Columnwise", 7, None, true, || {}, |thread_count| {
-        let task = multi_chained::init_single(&input, &temp, &output, 0);
-        Workers::run(thread_count, task);
-        compute_output(&output.get_data())
-      })
-      .parallel("Multidimensional - In-order", 4, None, true, || {}, |thread_count| {
-        let task = multi_chained::init_single(&input, &temp, &output, 2);
-        Workers::run(thread_count, task);
-        compute_output(&output.get_data())
-      })
-      // .parallel("Multiple-rows", 7, None, true, || {}, |thread_count| {
-      //   let task = multi_chained::init_single(&input, &temp, &output, 6);
-      //   Workers::run(thread_count, task);
-      //   compute_output(&output.get_data())
-      // })
-      .parallel("Parallel row-based", 5, None, true, || {}, |thread_count| {
+      .parallel("Sequential row-based", 3, None, false, || {}, |thread_count| {
         let task = parallel_rowbased::create_task(&input, &output);
         Workers::run(thread_count, task);
         compute_output(&output.get_data())
       })
-      .cpp_sequential(cpp_enabled, "Reference C++", "scan-sequential", input.get_data().len());
-      //.cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-tbb", size)
-      //.cpp_parlay(cpp_enabled, "ParlayLib", 8, None, "scan-parlay", size);
+      .parallel("Column-wise chained", 5, None, true, || {}, |thread_count| {
+        let task = columnwise_chained::init_single(&input, &temp, &output);
+        Workers::run(thread_count, task);
+        compute_output(&output.get_data())
+      })
+      .parallel("Row-wise chained", 7, None, true, || {}, |thread_count| {
+        let task = rowwise_chained::init_single(&input, &temp, &output);
+        Workers::run(thread_count, task);
+        compute_output(&output.get_data())
+      })
+      
+      .parallel("Column-row chained", 6, None, true, || {}, |thread_count| {
+        let task = column_row_chained::init_single(&input, &temp, &output);
+        Workers::run(thread_count, task);
+        compute_output(&output.get_data())
+      })
+      .cpp_sequential(cpp_enabled, "Reference sequential C++", "scan-multidim-sequential", input.get_data().len(), input.get_inner_size(), input.total_inner_count());
   }
 }
 
 pub fn run_inplace(cpp_enabled: bool) {
   for size in [SIZE] {
-    let temp = chained::create_temp();
-    let values = unsafe { utils::array::alloc_undef_u64_array(size) };
-
-    let values2 = unsafe { utils::array::MultArray::new([size]) };
-    let temp2 = multi_chained::create_temp(&values2);
+    let values = unsafe { utils::array::MultArray::new([size]) };
+    let temp = column_row_chained::create_temp(&values);
 
     let name = "Prefix-sum inplace (n = ".to_owned() + &(size).to_formatted_string(&Locale::en) + ")";
     benchmark(
-        if size < SIZE { ChartStyle::WithKey } else { ChartStyle::WithoutKey },
+        ChartStyle::WithKey,
         &name,
-        || { fill(&values) },
-        || { reference_sequential_single(&values, &values) }
+        || { fill(&values.get_data()) },
+        || { reference_sequential_single(&values.get_data(), &values.get_data()) }
       )
-      
-      .parallel("Multidimensional - Columnwise2", 6, None, true, || { fill(&values2.get_data()) }, |thread_count| {
-        let task = multi_chained::init_single(&values2, &temp2, &values2, 3);
+      .parallel("Adaptive chained", 7, None, false, || { fill(&values.get_data()) }, |thread_count| {
+        let task = zero_overhead::init_single(&values.get_data(), &temp, &values.get_data());
         Workers::run(thread_count, task);
-        // for i in 0 .. values2.get_data().len() {
-        //   if values2.get_data()[i].load(Ordering::Relaxed) != values[i].load(Ordering::Relaxed) {
-        //     println!("some block is skipped :( {:?}, {:?}, {:?}, {:?}", i, values2.get_data()[i].load(Ordering::Relaxed), values[i].load(Ordering::Relaxed), thread_count);
-        //   }
-        // }
-        compute_output(&values2.get_data())
+        compute_output(&values.get_data())
       })
-      .parallel("Adaptive chained scan", 6, None, true, || { fill(&values) }, |thread_count| {
-        let task = our_chained::init_single(&values, &temp, &values);
+      .parallel("Column-row chained", 6, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = column_row_chained::init_single(&values, &temp, &values);
         Workers::run(thread_count, task);
-        compute_output(&values)
+        compute_output(&values.get_data())
       })
-      .parallel("Scan-then-propagate", 3, Some(13), false, || { fill(&values) }, |thread_count| {
-        let task = scan_then_propagate::create_task(&values, &values);
-        Workers::run(thread_count, task);
-        compute_output(&values)
-      })
-      .parallel("Reduce-then-scan", 5, None, false, || { fill(&values) }, |thread_count| {
-        let task = reduce_then_scan::create_task(&values, &values);
-        Workers::run(thread_count, task);
-        compute_output(&values)
-      })
-      .parallel("Chained scan", 7, None, false, || { fill(&values) }, |thread_count| {
-        let task = chained::init_single(&values, &temp, &values);
-        Workers::run(thread_count, task);
-        compute_output(&values)
-      })
-      .parallel("Assisted scan-t.-prop.", 2, Some(12), true, || { fill(&values) }, |thread_count| {
-        let task = our_scan_then_propagate::create_task(&values, &values, None);
-        Workers::run(thread_count, task);
-        compute_output(&values)
-      })
-      .parallel("Assisted reduce-t.-scan", 4, None, true, || { fill(&values) }, |thread_count| {
-        let task = our_reduce_then_scan::create_task(&values, &values, None);
-        Workers::run(thread_count, task);
-        compute_output(&values)
-      })
-      .parallel("Adaptive chained scan", 6, None, true, || { fill(&values) }, |thread_count| {
-        let task = our_chained::init_single(&values, &temp, &values);
-        Workers::run(thread_count, task);
-        compute_output(&values)
-      })
-      .cpp_sequential(cpp_enabled, "Reference C++", "scan-inplace-sequential", size)
-      .cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-inplace-tbb", size)
-      .cpp_parlay(cpp_enabled, "ParlayLib", 8, None, "scan-inplace-parlay", size);
+      .cpp_sequential(cpp_enabled, "Reference sequential C++", "scan-inplace-sequential", size, size, 1);
   }
 }
 
 pub fn run_inplace_multidim(cpp_enabled: bool) {
-  for size in [SIZE] {
-    let shape = [1000, 100000]; //[3, 30000000] [10000, 1000] [100000, 1000] [5, 15000000] [10000, 10000] [1300, 100000]
+  for shape in MULTIDIM_SHAPES {
     let values = unsafe { utils::array::MultArray::new(shape) };
-    let output2 = unsafe { utils::array::MultArray::new(shape) };
-    let temp2 = multi_chained::create_temp(&output2);
-    let temp = multi_chained::create_temp(&values);
-    let name = "Prefix-sum inplace (n = ".to_owned() + &(values.get_data().len()).to_formatted_string(&Locale::en) + &format!(" -- {:?}", shape) + ")";
+    let temp = column_row_chained::create_temp(&values);
+    let name = "Prefix-sum inplace -- m (n = ".to_owned() + &(values.get_data().len()).to_formatted_string(&Locale::en) + &format!(" -- {:?}", shape) + ")";
     
     benchmark(
-        if size < SIZE { ChartStyle::WithKey } else { ChartStyle::WithoutKey },
+        ChartStyle::WithKey,
         &name,
         || { fill(&values.get_data()) },
         || { reference_sequential_multidim(&values, &values) }
       )
-      .parallel("Multidimensional - Columnwise2", 6, None, true, || { fill(&values.get_data()) }, |thread_count| {
-        let task = multi_chained::init_single(&values, &temp, &values, 3);
-        Workers::run(thread_count, task);
-        // for i in 0 .. output2.get_data().len() {
-        //   if i < 9998193 && output2.get_data()[i].load(Ordering::Relaxed) != values.get_data()[i].load(Ordering::Relaxed) {
-        //     println!("some block is skipped :( {:?}, {:?}, {:?}, {:?}", i, output2.get_data()[i].load(Ordering::Relaxed), values.get_data()[i].load(Ordering::Relaxed), thread_count);
-        //   }
-        // }
-        compute_output(&values.get_data())
-      })
-      .parallel("Parallel row-based", 5, None, true, || { fill(&values.get_data()) }, |thread_count| {
+      .parallel("Sequential row-based", 3, None, false, || { fill(&values.get_data()) }, |thread_count| {
         let task = parallel_rowbased::create_task(&values, &values);
         Workers::run(thread_count, task);
         compute_output(&values.get_data())
       })
-      
-      // .parallel("Adaptive chained scan", 5, None, true, || {}, |thread_count| {
-      //   let task = our_chained::init_single(&input.get_data(), &temp2, &output.get_data());
-      //   Workers::run(thread_count, task);
-      //   compute_output(&output.get_data())
-      // })
-      .parallel("Multidimensional - Columnwise", 7, None, true, || { fill(&values.get_data()) }, |thread_count| {
-        let task = multi_chained::init_single(&values, &temp, &values, 0);
+      .parallel("Column-wise chained", 5, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = column_row_chained::init_single(&values, &temp, &values);
         Workers::run(thread_count, task);
         compute_output(&values.get_data())
       })
-      .parallel("Multidimensional - In-order", 4, None, true, || { fill(&values.get_data()) }, |thread_count| {
-        let task = multi_chained::init_single(&values, &temp, &values, 2);
+      .parallel("Row-wise chained", 7, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = column_row_chained::init_single(&values, &temp, &values);
         Workers::run(thread_count, task);
         compute_output(&values.get_data())
       })
-      // .parallel("Multiple-rows", 7, None, true, || {}, |thread_count| {
-      //   let task = multi_chained::init_single(&input, &temp, &output, 6);
-      //   Workers::run(thread_count, task);
-      //   compute_output(&output.get_data())
-      // })
-      .cpp_sequential(cpp_enabled, "Reference C++", "scan-inplace-sequential", size)
-      .cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-inplace-tbb", size)
-      .cpp_parlay(cpp_enabled, "ParlayLib", 8, None, "scan-inplace-parlay", size);
+      .parallel("Column-row chained", 6, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = column_row_chained::init_single(&values, &temp, &values);
+        Workers::run(thread_count, task);
+        compute_output(&values.get_data())
+      })
+      .cpp_sequential(cpp_enabled, "Reference sequential C++", "scan-inplace-sequential", values.get_data().len(), values.get_inner_size(), values.total_inner_count());
   }
 }
-
 
 pub fn fill(values: &[AtomicU64]) {
   for (idx, value) in values.iter().enumerate() {

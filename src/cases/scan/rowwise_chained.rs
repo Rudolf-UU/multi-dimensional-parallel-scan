@@ -1,43 +1,48 @@
-use core::sync::atomic::{Ordering, AtomicU64};
-use crate::cases::scan::fold_sequential;
-use crate::cases::scan::scan_sequential;
-use crate::cases::scan::chained::{ BlockInfo, reset, STATE_PREFIX_AVAILABLE, STATE_AGGREGATE_AVAILABLE };
+use core::sync::atomic::{Ordering, AtomicU32};
+use crate::cases::scan::{fold_sequential, scan_sequential, BLOCK_SIZE};
+use crate::cases::scan::column_row_chained::{ BlockInfo, Data, reset, STATE_PREFIX_AVAILABLE, STATE_AGGREGATE_AVAILABLE };
 use crate::core::worker::*;
 use crate::core::task::*;
 use crate::core::workassisting_loop::*;
+use crate::utils::array::MultArray;
 
-const BLOCK_SIZE: u64 = 1024 * 4;
-
-pub fn init_single(input: &[AtomicU64], temp: &[BlockInfo], output: &[AtomicU64]) -> Task {
+pub fn init_single<const N: usize>(input: &MultArray<N>, temp: &[BlockInfo], output: &MultArray<N>) -> Task {
   reset(temp);
   create_task(input, temp, output)
 }
 
-struct Data<'a> {
-  input: &'a [AtomicU64],
-  temp: &'a [BlockInfo],
-  output: &'a [AtomicU64]
-}
+fn create_task<const N: usize>(input_m: &MultArray<N>, temp: &[BlockInfo], output_m: &MultArray<N>) -> Task {
+  let inner_size = input_m.get_inner_size() as u64;
+  let inner_rows = input_m.total_inner_count() as u64;
+  let input = input_m.get_data();
+  let output = output_m.get_data();
+  
+  let blocks_per_row = (inner_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  let block_count = blocks_per_row.checked_mul(inner_rows).expect("Block count overflowed u64 size") as u32;
 
-fn create_task(input: &[AtomicU64], temp: &[BlockInfo], output: &[AtomicU64]) -> Task {
-  Task::new_dataparallel::<Data>(run, finish, Data{ input, temp, output }, ((input.len() as u64 + BLOCK_SIZE - 1) / BLOCK_SIZE) as u32, false)
+  Task::new_dataparallel::<Data>(run, finish, Data{ input, temp, output, blocks_per_row, inner_size:inner_size as u64 }, block_count, false)
 }
 
 fn run(_workers: &Workers, task: *const TaskObject<Data>, loop_arguments: LoopArguments) {
   let data = unsafe { TaskObject::get_data(task) };
   let mut sequential = true;
+  
   workassisting_loop!(loop_arguments, |block_index| {
-    // reduce-then-scan
-    let start = block_index as usize * BLOCK_SIZE as usize;
-    let end = ((block_index as usize + 1) * BLOCK_SIZE as usize).min(data.input.len());
+    let row_index = block_index as usize / data.blocks_per_row as usize;
+    let col_index = block_index as usize - (row_index * data.blocks_per_row as usize);
+    
+    let start = col_index * BLOCK_SIZE as usize + row_index * data.inner_size as usize;
+    let end = ((col_index + 1) * BLOCK_SIZE as usize + row_index * data.inner_size as usize).min(data.inner_size as usize * (row_index + 1));
 
-    // Check if we already have an aggregate of the previous block.
+    // Check if we already have a prefix of the previous block or
+    // if the current block is at the start of a row.
     // If that is the case, then we can perform the scan directly.
     // Otherwise we perform a reduce-then-scan over this block.
-    let aggregate_start = if !sequential {
-      None // Don't switch back from parallel mode to sequential mode
-    } else if block_index ==  0 {
+    let aggregate_start = if col_index == 0 {
+      sequential = true;
       Some(0)
+    } else if !sequential {
+      None // Don't switch back from parallel mode to sequential mode
     } else {
       let previous = block_index - 1;
       let previous_state = data.temp[previous as usize].state.load(Ordering::Acquire);

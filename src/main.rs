@@ -6,85 +6,30 @@ use std::{path::Path, io::stdin};
 use crate::utils::thread_pinning;
 
 fn main() {
-  let cpp_enabled = false;//setup_cpp();
+  let cpp_enabled = setup_cpp();
 
   if !cpp_enabled {
-    println!("Running the benchmarks without the C++ and oneTBB implementations.");
+    println!("Running the benchmarks without the C++ implementations.");
   }
 
   affinity::set_thread_affinity([thread_pinning::AFFINITY_MAPPING[0]]).unwrap();
 
-  //cases::scan::run_multidim(cpp_enabled);
-  //cases::scan::run_inplace(cpp_enabled);
+  cases::scan::run(cpp_enabled);
+  cases::scan::run_multidim(cpp_enabled);
+  cases::scan::run_inplace(cpp_enabled);
   cases::scan::run_inplace_multidim(cpp_enabled);
-  //cases::scan_ratio::run(cpp_enabled, false);
-  //cases::scan_ratio::run(cpp_enabled, true);
   //cases::compact::run(cpp_enabled);
 }
 
-// Utilities to install and build the c++ and oneTBB implementation.
+// Utility to install and build the c++ implementation.
 fn setup_cpp() -> bool {
-  if !Path::new("./reference-cpp/oneTBB-install").is_dir() {
-    println!("This benchmark suite has a reference implementation in C++ and parallel implementations in oneTBB and parlaylib. This requires Linux, clang++ and git. This program will automatically download and install oneTBB and parlaylib (locally in ./reference-cpp), if enabled.");
-    println!("Do you want to enable the C++ and oneTBB implementations? y/n");
-
+  if !Path::new("./reference-cpp/build").is_dir() {
+    println!("This benchmark program provides a reference implementation in C++. This requires Linux and clang++.");
+    println!("Do you want to enable the C++ reference implementation? y/n");
+    
     let enable = ask();
     if !enable {
       return false;
-    }
-
-    println!("Downloading and installing oneTBB locally");
-    match std::process::Command::new("sh").arg("./reference-cpp/install-oneTBB.sh").spawn() {
-      Ok(mut child) => {
-        match child.wait() {
-          Ok(result) => {
-            if !result.success() {
-              println!("Build of oneTBB failed.");
-              println!("The log above may contain errors and you may inspect ./reference-cpp/oneTBB.");
-              println!("Remove ./reference-cpp/oneTBB and ./reference-cpp/oneTBB-install before trying again.");
-              return false;
-            }
-          }
-          Err(_) => {
-            println!("Build of oneTBB failed.");
-            println!("The log above may contain errors and you may inspect ./reference-cpp/oneTBB.");
-            println!("Remove ./reference-cpp/oneTBB and ./reference-cpp/oneTBB-install before trying again.");
-            return false;
-          },
-        }
-      },
-      Err(_) => {
-        println!("Build of oneTBB failed.");
-        return false;
-      }
-    }
-  }
-
-  if !Path::new("./reference-cpp/parlaylib").is_dir() {
-    println!("Downloading parlaylib");
-    match std::process::Command::new("sh").arg("./reference-cpp/install-parlaylib.sh").spawn() {
-      Ok(mut child) => {
-        match child.wait() {
-          Ok(result) => {
-            if !result.success() {
-              println!("Downloading parlaylib failed.");
-              println!("The log above may contain errors and you may inspect ./reference-cpp/parlaylib.");
-              println!("Remove ./reference-cpp/parlaylib before trying again.");
-              return false;
-            }
-          }
-          Err(_) => {
-            println!("Downloading parlaylib failed.");
-            println!("The log above may contain errors and you may inspect ./reference-cpp/parlaylib.");
-            println!("Remove ./reference-cpp/parlaylib before trying again.");
-            return false;
-          },
-        }
-      },
-      Err(_) => {
-        println!("Build of parlaylib failed.");
-        return false;
-      }
     }
   }
 
