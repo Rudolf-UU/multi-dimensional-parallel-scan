@@ -12,7 +12,7 @@ fn main() {
     println!("Running the benchmarks without the C++ implementations.");
   }
 
-  affinity::set_thread_affinity([thread_pinning::AFFINITY_MAPPING[0]]).unwrap();
+  //affinity::set_thread_affinity([thread_pinning::AFFINITY_MAPPING[0]]).unwrap();
 
   cases::scan::run(cpp_enabled);
   cases::scan::run_multidim(cpp_enabled);

@@ -20,7 +20,6 @@ fn create_task<const N: usize>(input_m: &MultArray<N>, temp: &[BlockInfo], outpu
   let blocks_per_row = (inner_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
   let block_count = blocks_per_row.checked_mul(inner_rows).expect("Block count overflowed u64 size") as u32;
 
-  
   Task::new_dataparallel::<Data>(run, finish, Data{ input, temp, output, blocks_per_row, inner_size:inner_size as u64 }, block_count, false)
 }
 

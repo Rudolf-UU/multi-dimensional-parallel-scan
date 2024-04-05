@@ -58,17 +58,17 @@ pub fn run_multidim(cpp_enabled: bool) {
         || {},
         || { reference_sequential_multidim(&input, &output) }
       )
-      .parallel("Sequential row-based", 3, None, false, || {}, |thread_count| {
+      .parallel("Sequential row-based", 5, None, false, || {}, |thread_count| {
         let task = parallel_rowbased::create_task(&input, &output);
         Workers::run(thread_count, task);
         compute_output(&output.get_data())
       })
-      .parallel("Column-wise chained", 5, None, true, || {}, |thread_count| {
+      .parallel("Column-wise chained", 7, None, true, || {}, |thread_count| {
         let task = columnwise_chained::init_single(&input, &temp, &output);
         Workers::run(thread_count, task);
         compute_output(&output.get_data())
       })
-      .parallel("Row-wise chained", 7, None, true, || {}, |thread_count| {
+      .parallel("Row-wise chained", 8, None, true, || {}, |thread_count| {
         let task = rowwise_chained::init_single(&input, &temp, &output);
         Workers::run(thread_count, task);
         compute_output(&output.get_data())
@@ -121,18 +121,18 @@ pub fn run_inplace_multidim(cpp_enabled: bool) {
         || { fill(&values.get_data()) },
         || { reference_sequential_multidim(&values, &values) }
       )
-      .parallel("Sequential row-based", 3, None, false, || { fill(&values.get_data()) }, |thread_count| {
+      .parallel("Sequential row-based", 5, None, false, || { fill(&values.get_data()) }, |thread_count| {
         let task = parallel_rowbased::create_task(&values, &values);
         Workers::run(thread_count, task);
         compute_output(&values.get_data())
       })
-      .parallel("Column-wise chained", 5, None, true, || { fill(&values.get_data()) }, |thread_count| {
-        let task = column_row_chained::init_single(&values, &temp, &values);
+      .parallel("Column-wise chained", 7, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = columnwise_chained::init_single(&values, &temp, &values);
         Workers::run(thread_count, task);
         compute_output(&values.get_data())
       })
-      .parallel("Row-wise chained", 7, None, true, || { fill(&values.get_data()) }, |thread_count| {
-        let task = column_row_chained::init_single(&values, &temp, &values);
+      .parallel("Row-wise chained", 8, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = rowwise_chained::init_single(&values, &temp, &values);
         Workers::run(thread_count, task);
         compute_output(&values.get_data())
       })

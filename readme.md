@@ -1,5 +1,7 @@
 # Zero-Overhead Parallel Scans for CPUs
 
+# Still needs to be updated!
+
 This repository contains implementations of three parallel scan algorithms for multi-core CPUs which do not need to fix the number of available
 cores at the start, and have zero overhead compared to sequential scans when executed on a single core. These two
 properties are in contrast with most existing parallel scan algorithms, which are asymptotically optimal, but have a
