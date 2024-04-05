@@ -73,7 +73,6 @@ pub fn run_multidim(cpp_enabled: bool) {
         Workers::run(thread_count, task);
         compute_output(&output.get_data())
       })
-      
       .parallel("Column-row chained", 6, None, true, || {}, |thread_count| {
         let task = column_row_chained::init_single(&input, &temp, &output);
         Workers::run(thread_count, task);

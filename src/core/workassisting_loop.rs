@@ -37,6 +37,8 @@ macro_rules! workassisting_loop_row_column {
       // A row (optionally multiple rows) can fit within a single block of BLOCK_SIZE.
       // Therefore all threads will claim blocks consecutively and sequential scan the row(s) within.
       loop {
+        block_idx = work_index.fetch_add(1, Ordering::Relaxed);
+        
         if block_idx == work_size - 1 {
           empty_signal.task_empty();
         } else if block_idx >= work_size {
@@ -46,8 +48,6 @@ macro_rules! workassisting_loop_row_column {
   
         let $block_index_1: u32 = block_idx;
         $multiple_rows_scan
-
-        block_idx = work_index.fetch_add(1, Ordering::Relaxed);
       }
     } 
     else { 
