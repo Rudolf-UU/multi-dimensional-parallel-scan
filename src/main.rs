@@ -6,7 +6,7 @@ use std::{path::Path, io::stdin};
 use crate::utils::thread_pinning;
 
 fn main() {
-  let cpp_enabled = false; //setup_cpp();
+  let cpp_enabled = false;//setup_cpp();
 
   if !cpp_enabled {
     println!("Running the benchmarks without the C++ and oneTBB implementations.");
@@ -14,9 +14,9 @@ fn main() {
 
   affinity::set_thread_affinity([thread_pinning::AFFINITY_MAPPING[0]]).unwrap();
 
-  cases::scan::run_multidim(cpp_enabled);
-  //cases::scan::run(cpp_enabled);
+  //cases::scan::run_multidim(cpp_enabled);
   //cases::scan::run_inplace(cpp_enabled);
+  cases::scan::run_inplace_multidim(cpp_enabled);
   //cases::scan_ratio::run(cpp_enabled, false);
   //cases::scan_ratio::run(cpp_enabled, true);
   //cases::compact::run(cpp_enabled);

@@ -69,39 +69,31 @@ pub fn run(cpp_enabled: bool) {
 
 pub fn run_multidim(cpp_enabled: bool) {
   for size in [SIZE] {
-    let shape = [1300, 100000]; //[3, 30000000] [10000, 1000] [100000, 1000] [5, 15000000] [10000, 10000] [1300, 100000]
+    let shape = [1000, 100000]; //[3, 30000000] [10000, 1000] [100000, 1000] [5, 15000000] [10000, 10000] [1300, 100000]
     let input = unsafe { utils::array::MultArray::new(shape) };
     let output = unsafe { utils::array::MultArray::new(shape) };
+    let output2 = unsafe { utils::array::MultArray::new(shape) };
+
     let temp = multi_chained::create_temp(&input);
     // let temp2 = chained::create_temp();
-    mult_fill(&input);
+    fill(input.get_data());
 
-    // let shape2 = [2,3,5]; //[3, 30000000] [10000, 1000] [100000, 1000] [5, 15000000] [10000, 10000] [1300, 100000]
-    // let input2 = unsafe { utils::array::MultArray::new(shape2) };
-    // let output2 = unsafe { utils::array::MultArray::new(shape2) };
-    // let temp2 = multi_chained::create_temp(&input2);
-    // mult_fill(&input2);
-
-    // println!("input size {:?}", input.get_data().len());
-    // let dim = input.get_shape();
-    // let inner = input.get_inner_size();
-    // let count_inner = input.total_inner_count();
-    // println!("Shape {:?}", dim);
-    // println!("Inner {:?}", inner);
-    // println!("Inner count {:?}", count_inner);
-
-    let name = "Prefix-sum (n = ".to_owned() + &(input.get_data().len()).to_formatted_string(&Locale::en) + " -- [1300, 100000]" + ")"; //
+    let name = "Prefix-sum (n = ".to_owned() + &(input.get_data().len()).to_formatted_string(&Locale::en) + &format!(" -- {:?}", shape) + ")"; //
     benchmark(
         ChartStyle::WithKey,
         &name,
         || {},
-        || { reference_sequential_single_mult(&input, &output) }
+        || { reference_sequential_multidim(&input, &output) }
       )
       .parallel("Multidimensional - Columnwise2", 6, None, true, || {}, |thread_count| {
-        let task = multi_chained::init_single(&input, &temp, &output, 3);
+        let task = multi_chained::init_single(&input, &temp, &output2, 3);
         Workers::run(thread_count, task);
-        //println!("test: {:?}", output.get_data()[input.get_data().len()-1]);
-        compute_output(&output.get_data())
+        // for i in 1 .. output2.get_data().len() {
+        //   if output2.get_data()[i].load(Ordering::Relaxed) != output.get_data()[i].load(Ordering::Relaxed) {
+        //     println!("some block is skipped :(");
+        //   }
+        // }
+        compute_output(&output2.get_data())
       })
       // .parallel("Adaptive chained scan", 5, None, true, || {}, |thread_count| {
       //   let task = our_chained::init_single(&input.get_data(), &temp2, &output.get_data());
@@ -128,9 +120,9 @@ pub fn run_multidim(cpp_enabled: bool) {
         Workers::run(thread_count, task);
         compute_output(&output.get_data())
       })
-      .cpp_sequential(cpp_enabled, "Reference C++", "scan-sequential", size)
-      .cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-tbb", size)
-      .cpp_parlay(cpp_enabled, "ParlayLib", 8, None, "scan-parlay", size);
+      .cpp_sequential(cpp_enabled, "Reference C++", "scan-sequential", input.get_data().len());
+      //.cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-tbb", size)
+      //.cpp_parlay(cpp_enabled, "ParlayLib", 8, None, "scan-parlay", size);
   }
 }
 
@@ -138,6 +130,10 @@ pub fn run_inplace(cpp_enabled: bool) {
   for size in [SIZE] {
     let temp = chained::create_temp();
     let values = unsafe { utils::array::alloc_undef_u64_array(size) };
+
+    let values2 = unsafe { utils::array::MultArray::new([size]) };
+    let temp2 = multi_chained::create_temp(&values2);
+
     let name = "Prefix-sum inplace (n = ".to_owned() + &(size).to_formatted_string(&Locale::en) + ")";
     benchmark(
         if size < SIZE { ChartStyle::WithKey } else { ChartStyle::WithoutKey },
@@ -145,6 +141,22 @@ pub fn run_inplace(cpp_enabled: bool) {
         || { fill(&values) },
         || { reference_sequential_single(&values, &values) }
       )
+      
+      .parallel("Multidimensional - Columnwise2", 6, None, true, || { fill(&values2.get_data()) }, |thread_count| {
+        let task = multi_chained::init_single(&values2, &temp2, &values2, 3);
+        Workers::run(thread_count, task);
+        // for i in 0 .. values2.get_data().len() {
+        //   if values2.get_data()[i].load(Ordering::Relaxed) != values[i].load(Ordering::Relaxed) {
+        //     println!("some block is skipped :( {:?}, {:?}, {:?}, {:?}", i, values2.get_data()[i].load(Ordering::Relaxed), values[i].load(Ordering::Relaxed), thread_count);
+        //   }
+        // }
+        compute_output(&values2.get_data())
+      })
+      .parallel("Adaptive chained scan", 6, None, true, || { fill(&values) }, |thread_count| {
+        let task = our_chained::init_single(&values, &temp, &values);
+        Workers::run(thread_count, task);
+        compute_output(&values)
+      })
       .parallel("Scan-then-propagate", 3, Some(13), false, || { fill(&values) }, |thread_count| {
         let task = scan_then_propagate::create_task(&values, &values);
         Workers::run(thread_count, task);
@@ -181,14 +193,65 @@ pub fn run_inplace(cpp_enabled: bool) {
   }
 }
 
-pub fn fill(values: &[AtomicU64]) {
-  for (idx, value) in values.iter().enumerate() {
-    value.store(random(idx as u64) as u64, Ordering::Relaxed);
+pub fn run_inplace_multidim(cpp_enabled: bool) {
+  for size in [SIZE] {
+    let shape = [1000, 100000]; //[3, 30000000] [10000, 1000] [100000, 1000] [5, 15000000] [10000, 10000] [1300, 100000]
+    let values = unsafe { utils::array::MultArray::new(shape) };
+    let output2 = unsafe { utils::array::MultArray::new(shape) };
+    let temp2 = multi_chained::create_temp(&output2);
+    let temp = multi_chained::create_temp(&values);
+    let name = "Prefix-sum inplace (n = ".to_owned() + &(values.get_data().len()).to_formatted_string(&Locale::en) + &format!(" -- {:?}", shape) + ")";
+    
+    benchmark(
+        if size < SIZE { ChartStyle::WithKey } else { ChartStyle::WithoutKey },
+        &name,
+        || { fill(&values.get_data()) },
+        || { reference_sequential_multidim(&values, &values) }
+      )
+      .parallel("Multidimensional - Columnwise2", 6, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = multi_chained::init_single(&values, &temp, &values, 3);
+        Workers::run(thread_count, task);
+        // for i in 0 .. output2.get_data().len() {
+        //   if i < 9998193 && output2.get_data()[i].load(Ordering::Relaxed) != values.get_data()[i].load(Ordering::Relaxed) {
+        //     println!("some block is skipped :( {:?}, {:?}, {:?}, {:?}", i, output2.get_data()[i].load(Ordering::Relaxed), values.get_data()[i].load(Ordering::Relaxed), thread_count);
+        //   }
+        // }
+        compute_output(&values.get_data())
+      })
+      .parallel("Parallel row-based", 5, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = parallel_rowbased::create_task(&values, &values);
+        Workers::run(thread_count, task);
+        compute_output(&values.get_data())
+      })
+      
+      // .parallel("Adaptive chained scan", 5, None, true, || {}, |thread_count| {
+      //   let task = our_chained::init_single(&input.get_data(), &temp2, &output.get_data());
+      //   Workers::run(thread_count, task);
+      //   compute_output(&output.get_data())
+      // })
+      .parallel("Multidimensional - Columnwise", 7, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = multi_chained::init_single(&values, &temp, &values, 0);
+        Workers::run(thread_count, task);
+        compute_output(&values.get_data())
+      })
+      .parallel("Multidimensional - In-order", 4, None, true, || { fill(&values.get_data()) }, |thread_count| {
+        let task = multi_chained::init_single(&values, &temp, &values, 2);
+        Workers::run(thread_count, task);
+        compute_output(&values.get_data())
+      })
+      // .parallel("Multiple-rows", 7, None, true, || {}, |thread_count| {
+      //   let task = multi_chained::init_single(&input, &temp, &output, 6);
+      //   Workers::run(thread_count, task);
+      //   compute_output(&output.get_data())
+      // })
+      .cpp_sequential(cpp_enabled, "Reference C++", "scan-inplace-sequential", size)
+      .cpp_tbb(cpp_enabled, "oneTBB", 1, None, "scan-inplace-tbb", size)
+      .cpp_parlay(cpp_enabled, "ParlayLib", 8, None, "scan-inplace-parlay", size);
   }
 }
 
-pub fn mult_fill<const N: usize>(array: &utils::array::MultArray<N>) {
-  let values = array.get_data();
+
+pub fn fill(values: &[AtomicU64]) {
   for (idx, value) in values.iter().enumerate() {
     value.store(random(idx as u64) as u64, Ordering::Relaxed);
   }
@@ -203,7 +266,7 @@ pub fn reference_sequential_single(input: &[AtomicU64], output: &[AtomicU64]) ->
   compute_output(output)
 }
 
-pub fn reference_sequential_single_mult<const N: usize>(input: &utils::array::MultArray<N>, output: &utils::array::MultArray<N>) -> u64 {
+pub fn reference_sequential_multidim<const N: usize>(input: &utils::array::MultArray<N>, output: &utils::array::MultArray<N>) -> u64 {
   let rows = input.total_inner_count();
   let size = input.get_inner_size();
   let input_data = input.get_data();
