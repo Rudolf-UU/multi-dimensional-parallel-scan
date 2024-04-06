@@ -1,5 +1,5 @@
 /target
-/results
+/results*
 /reference-cpp/oneTBB
 /reference-cpp/oneTBB-install
 /reference-cpp/parlaylib

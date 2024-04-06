@@ -98,7 +98,7 @@ impl<T> Drop for Benchmarker<T> {
     writeln!(&mut writer_gnuplot, "set output \"{}\"", filename.clone() + ".pdf").unwrap();
     if self.chart_style == ChartStyle::WithKey {
       writeln!(&mut writer_gnuplot, "set key on").unwrap();
-      writeln!(&mut writer_gnuplot, "set key top left Left reverse").unwrap();
+      writeln!(&mut writer_gnuplot, "set key bottom right Right").unwrap();
     } else {
       writeln!(&mut writer_gnuplot, "set key off").unwrap();
     }
