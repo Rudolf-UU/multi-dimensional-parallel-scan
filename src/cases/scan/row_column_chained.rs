@@ -50,7 +50,7 @@ fn create_task<const N: usize>(input_m: &MultArray<N>, temp: &[BlockInfo], outpu
   
   let blocks_per_row = (inner_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
   let block_count = if blocks_per_row > 1 {
-      blocks_per_row.checked_mul(inner_rows).expect("Block count overflowed u64 size") as u32
+        blocks_per_row.checked_mul(inner_rows).expect("Block count overflowed u64 size") as u32
       } else {
         // Multiple rows are (optionally) combined into a single block, which changes the total block_count
         inner_rows.div_ceil(BLOCK_SIZE / inner_size) as u32
@@ -63,11 +63,6 @@ fn run(_workers: &Workers, task: *const TaskObject<Data>, loop_arguments: LoopAr
   let data = unsafe { TaskObject::get_data(task) };
   let inner_rows = data.input.len() / data.inner_size as usize;
   let segments = data.blocks_per_row as u32;
-  let mut start:usize;
-  let mut end:usize;
-  let mut temp_idx:usize;
-  let mut row_idx:usize;
-  let mut column_idx:usize;
 
   workassisting_loop_row_column!(loop_arguments, segments, 
   // Multiple-rows scan algorithm
@@ -84,41 +79,36 @@ fn run(_workers: &Workers, task: *const TaskObject<Data>, loop_arguments: LoopAr
   },
   // Row-wise scan algorithm
   |block_index| {
-    row_idx = block_index as usize / data.blocks_per_row as usize;
-    column_idx = block_index as usize - (row_idx * data.blocks_per_row as usize);
-    
-    start = column_idx * BLOCK_SIZE as usize + row_idx * data.inner_size as usize;
-    end = row_idx * data.inner_size as usize + ((column_idx + 1) * BLOCK_SIZE as usize).min(data.inner_size as usize);
-    temp_idx = block_index as usize;
-
-    adaptive_chained_lookback(data, column_idx, start, end, temp_idx);
+    let row_idx = block_index as usize / data.blocks_per_row as usize;
+    let column_idx = block_index as usize - (row_idx * data.blocks_per_row as usize);
+    let descriptor_idx = block_index as usize;
+    adaptive_chained_lookback(data, row_idx, column_idx, descriptor_idx);
   },
   // Column-wise scan algorithm
   |block_index, rows_completed| {
     let new_inner_rows = inner_rows - rows_completed as usize;
-    row_idx = (block_index as usize % new_inner_rows as usize) + rows_completed as usize;
-    column_idx = block_index as usize / new_inner_rows as usize;
-
-    start = row_idx * data.inner_size as usize + (column_idx * BLOCK_SIZE as usize);
-    end = row_idx * data.inner_size as usize + ((column_idx + 1) * BLOCK_SIZE as usize).min(data.inner_size as usize);
-    temp_idx = row_idx * data.blocks_per_row as usize + column_idx;
-
-    adaptive_chained_lookback(data, column_idx, start, end, temp_idx);
+    let row_idx = (block_index as usize % new_inner_rows as usize) + rows_completed as usize;
+    let column_idx = block_index as usize / new_inner_rows as usize;
+    let descriptor_idx = row_idx * data.blocks_per_row as usize + column_idx;
+    adaptive_chained_lookback(data, row_idx, column_idx, descriptor_idx);
   });
 }
 
-fn adaptive_chained_lookback(data:&Data<'_>, column_idx:usize, start:usize, end:usize, temp_idx:usize) {
+fn adaptive_chained_lookback(data:&Data<'_>, row_idx:usize, column_idx:usize, descriptor_idx:usize) {
   // Check if we already have a prefix of the previous block or
   // if the current block is at the start of a row.
   // If that is the case, then we can perform the scan directly.
   // Otherwise we perform a reduce-then-scan over this block.
+  let start = row_idx * data.inner_size as usize + column_idx * BLOCK_SIZE as usize;
+  let end = row_idx * data.inner_size as usize + ((column_idx + 1) * BLOCK_SIZE as usize).min(data.inner_size as usize);
+  
   let aggregate_start = if column_idx == 0 {
     Some(0)
   } else {
-    let previous = temp_idx - 1;
-    let previous_state = data.temp[previous as usize].state.load(Ordering::Acquire);
+    let previous = descriptor_idx - 1;
+    let previous_state = data.temp[previous].state.load(Ordering::Acquire);
     if previous_state == STATE_PREFIX_AVAILABLE {
-      Some(data.temp[previous as usize].prefix.load(Ordering::Acquire))
+      Some(data.temp[previous].prefix.load(Ordering::Acquire))
     } else {
       None
     }
@@ -126,24 +116,24 @@ fn adaptive_chained_lookback(data:&Data<'_>, column_idx:usize, start:usize, end:
 
   if let Some(aggregate) = aggregate_start {
     let local = scan_sequential(&data.input[start .. end], aggregate, &data.output[start .. end]);
-    data.temp[temp_idx as usize].prefix.store(local, Ordering::Relaxed);
-    data.temp[temp_idx as usize].state.store(STATE_PREFIX_AVAILABLE, Ordering::Release);
+    data.temp[descriptor_idx].prefix.store(local, Ordering::Relaxed);
+    data.temp[descriptor_idx].state.store(STATE_PREFIX_AVAILABLE, Ordering::Release);
   } else {
     let local = fold_sequential(&data.input[start .. end]);
-    data.temp[temp_idx as usize].aggregate.store(local, Ordering::Relaxed);
-    data.temp[temp_idx as usize].state.store(STATE_AGGREGATE_AVAILABLE, Ordering::Release);
+    data.temp[descriptor_idx].aggregate.store(local, Ordering::Relaxed);
+    data.temp[descriptor_idx].state.store(STATE_AGGREGATE_AVAILABLE, Ordering::Release);
 
     // Look-back phase -- computing the prefix based on predecessor aggregates
     let mut aggregate = 0;
-    let mut previous = temp_idx as usize - 1;
+    let mut previous = descriptor_idx - 1;
 
     loop {
-      let previous_state = data.temp[previous as usize].state.load(Ordering::Acquire);
+      let previous_state = data.temp[previous].state.load(Ordering::Acquire);
       if previous_state == STATE_PREFIX_AVAILABLE {
-        aggregate = data.temp[previous as usize].prefix.load(Ordering::Acquire) + aggregate;
+        aggregate = data.temp[previous].prefix.load(Ordering::Acquire) + aggregate;
         break;
       } else if previous_state == STATE_AGGREGATE_AVAILABLE {
-        aggregate = data.temp[previous as usize].aggregate.load(Ordering::Acquire) + aggregate;
+        aggregate = data.temp[previous].aggregate.load(Ordering::Acquire) + aggregate;
         previous = previous - 1;
       } else {
         // Continue looping until the state of the previous block changes.
@@ -151,8 +141,8 @@ fn adaptive_chained_lookback(data:&Data<'_>, column_idx:usize, start:usize, end:
     }
 
     // Share calculated prefix value
-    data.temp[temp_idx as usize].prefix.store(aggregate + local, Ordering::Relaxed);
-    data.temp[temp_idx as usize].state.store(STATE_PREFIX_AVAILABLE, Ordering::Release);
+    data.temp[descriptor_idx].prefix.store(aggregate + local, Ordering::Relaxed);
+    data.temp[descriptor_idx].state.store(STATE_PREFIX_AVAILABLE, Ordering::Release);
 
     scan_sequential(&data.input[start .. end], aggregate, &data.output[start .. end]);
   }

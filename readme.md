@@ -1,31 +1,10 @@
-# Multidimensional Parallel Scans for Multi-Core CPUs <!-- Zero-Overhead Parallel Scans for CPUs -->
+# Multidimensional Parallel Scans for Multi-Core CPUs
 
-# Still needs to be updated!
+In this repository several parallel scan algorithms are introduced, which are able to handle multidimensional data structures on multi-core CPUs. Many parallel scan algorithms have been introduced in the past years by several researchers, but most of them focus on just one-dimensional input sequences. The algorithms in this repository can adaptively change the number of cores working on the data during execution time and some are able to achieve zero overhead compared to the sequential scan when executed on a single core. The main algorithm is not only able to match the above two properties on multidimensional data sequences, but also matches the performance of the 'adaptive chained scan' presented in the 'zero-overhead parallel scans for multi-core CPUs' (https://doi.org/10.1145/3649169.3649248) on one-dimensional data sequences. 
 
-This repository is based on the [zero-overhead-parallel-scan](https://github.com/ivogabe/zero-overhead-parallel-scans). It contains several parallel scan algorithms
-for multi-dimensional data structures, including an algorithm that has zero overhead compared to sequential scan when executed on a single core, as well as zero overhead
-compared to the adaptive chained scan presented in the 'zero-overhead' paper. 
-
-The scan algorithms are implemented using the [work-assisting scheduler](https://github.com/ivogabe/workassisting), but could also be applied with other schedulers.
-
-<!-- This repository contains implementations of three parallel scan algorithms for multi-core CPUs which do not need to fix the number of available
-cores at the start, and have zero overhead compared to sequential scans when executed on a single core. These two
-properties are in contrast with most existing parallel scan algorithms, which are asymptotically optimal, but have a
-constant factor overhead compared to sequential scans when executed on a single core.
-We achieve these properties by adapting the classic three-phase scan algorithms. The resulting algorithms exhibit
-better performance than the original ones on multiple cores. Furthermore, we adapt the chained scan with decoupled
-look-back algorithm to also have these two properties.  While this algorithm was originally designed for GPUs, we show
-it is also suitable for multi-core CPUs, outperforming the classic three-phase scans
-in our benchmarks, by better using the caches of the processor at the cost of more synchronisation.
-In general our *adaptive chained scan* is the fastest parallel scan, but in specific situations our *assisted reduce-then-scan* is better.
-
-The scan algorithms are implemented using the [work-assisting scheduler](https://github.com/ivogabe/workassisting), but could also be applied with other schedulers. -->
+The general code setup and benchmarks within this repository are implemented using the original [zero-overhead-parallel-scan](https://github.com/ivogabe/zero-overhead-parallel-scans) repository. Furthermore, the scan algorithms are making use of this [work-assisting scheduler](https://github.com/ivogabe/workassisting), but could also be applied with other schedulers.
 
 ## Instructions
 To run the benchmarks, the Rust compiler and cargo need to be installed. Furthermore gnuplot needs to be installed, as the benchmark code automatically generates charts of the results. The benchmarks can be run with `cargo run`. The generated charts and tables are placed in `./results`. Depending on the processor, it may be needed to tune `AFFINITY_MAPPING` in `./src/utils/thread_pinning.rs`. This specifies the order in which the cores of the processor are used.
 
-The program will ask if a sequential implementation in C++ should be enabled. This requires Linux, clang++ and cmake. When enabled, it will automatically build and execute the reference C++ implementation.
-
-<!-- To run the benchmarks, the Rust compiler and cargo need to be installed. Furthermore gnuplot needs to be installed, as the benchmark code automatically generates charts of the results. The benchmarks can be run with `cargo run`. The generated charts and tables are placed in `./results`. Depending on the processor, it may be needed to tune `AFFINITY_MAPPING` in `./src/utils/thread_pinning.rs`. This specifies the order in which the cores of the processor are used.
-
-The program will ask if a sequential implementation in C++ and parallel implementations in oneTBB and ParlayLib should be enabled. This requires Linux, clang++, cmake and git. When enabled, it will automatically download and install oneTBB and ParlayLib locally in `./reference-cpp`. -->
+The program will ask if a sequential implementation in C++ should be enabled. This requires Linux, clang++ and cmake. When enabled, it will automatically build and execute a reference sequential C++ implementation.

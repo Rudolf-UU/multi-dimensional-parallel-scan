@@ -1,4 +1,4 @@
-use core::sync::atomic::{Ordering, AtomicU32};
+use core::sync::atomic::Ordering;
 use crate::cases::scan::{fold_sequential, scan_sequential, BLOCK_SIZE};
 use crate::cases::scan::row_column_chained::{ BlockInfo, Data, reset, STATE_PREFIX_AVAILABLE, STATE_AGGREGATE_AVAILABLE };
 use crate::core::worker::*;

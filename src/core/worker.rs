@@ -125,7 +125,7 @@ impl<'a> Workers<'a> {
       let mut signal = EmptySignal{ pointer: &self.activities[other_index], task, state: EmptySignalState::Assist };
 
       let (current_index, count_claimed) = if task.work_two_sided {
-        let i = task.work_index.load(Ordering::Relaxed);
+        let i = task.work_index.fetch_add(1,Ordering::Relaxed);
         (i, (i >> 16) + (i & 0xFFFF))
       } else {
         let i = task.work_index.fetch_add(1, Ordering::Relaxed);

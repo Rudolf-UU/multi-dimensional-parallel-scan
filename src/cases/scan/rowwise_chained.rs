@@ -1,4 +1,4 @@
-use core::sync::atomic::{Ordering, AtomicU32};
+use core::sync::atomic::Ordering;
 use crate::cases::scan::{fold_sequential, scan_sequential, BLOCK_SIZE};
 use crate::cases::scan::row_column_chained::{ BlockInfo, Data, reset, STATE_PREFIX_AVAILABLE, STATE_AGGREGATE_AVAILABLE };
 use crate::core::worker::*;
@@ -28,17 +28,17 @@ fn run(_workers: &Workers, task: *const TaskObject<Data>, loop_arguments: LoopAr
   let mut sequential = true;
   
   workassisting_loop!(loop_arguments, |block_index| {
-    let row_index = block_index as usize / data.blocks_per_row as usize;
-    let col_index = block_index as usize - (row_index * data.blocks_per_row as usize);
+    let row_idx = block_index as usize / data.blocks_per_row as usize;
+    let column_idx = block_index as usize - (row_idx * data.blocks_per_row as usize);
     
-    let start = col_index * BLOCK_SIZE as usize + row_index * data.inner_size as usize;
-    let end = ((col_index + 1) * BLOCK_SIZE as usize + row_index * data.inner_size as usize).min(data.inner_size as usize * (row_index + 1));
+    let start = column_idx * BLOCK_SIZE as usize + row_idx * data.inner_size as usize;
+    let end = ((column_idx + 1) * BLOCK_SIZE as usize + row_idx * data.inner_size as usize).min(data.inner_size as usize * (row_idx + 1));
 
     // Check if we already have a prefix of the previous block or
     // if the current block is at the start of a row.
     // If that is the case, then we can perform the scan directly.
     // Otherwise we perform a reduce-then-scan over this block.
-    let aggregate_start = if col_index == 0 {
+    let aggregate_start = if column_idx == 0 {
       sequential = true;
       Some(0)
     } else if !sequential {
