@@ -87,8 +87,8 @@ impl<T: Copy + Debug + Eq + Send> Benchmarker<T> {
 
 impl<T> Drop for Benchmarker<T> {
   fn drop(&mut self) {
-    std::fs::create_dir_all("./results-Intel").unwrap();
-    let filename = "./results-Intel/".to_owned() + &self.name.replace(' ', "_").replace('(', "").replace(')', "").replace('=', "_").replace('/', "_");
+    std::fs::create_dir_all("./results-intel-12900").unwrap();
+    let filename = "./results-intel-12900/".to_owned() + &self.name.replace(' ', "_").replace('(', "").replace(')', "").replace('=', "_").replace('/', "_");
 
     // Create .gnuplot file
     let file_gnuplot = File::create(filename.clone() + ".gnuplot").unwrap();

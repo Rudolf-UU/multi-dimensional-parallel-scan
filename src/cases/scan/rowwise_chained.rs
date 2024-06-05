@@ -1,4 +1,4 @@
-use core::sync::atomic::Ordering;
+use core::sync::atomic::{Ordering, AtomicU64};
 use crate::cases::scan::{fold_sequential, scan_sequential, BLOCK_SIZE};
 use crate::cases::scan::row_column_chained::{ BlockInfo, Data, reset, STATE_PREFIX_AVAILABLE, STATE_AGGREGATE_AVAILABLE };
 use crate::core::worker::*;
@@ -6,12 +6,12 @@ use crate::core::task::*;
 use crate::core::workassisting_loop::*;
 use crate::utils::array::MultArray;
 
-pub fn init_single<const N: usize>(input: &MultArray<N>, temp: &[BlockInfo], output: &MultArray<N>) -> Task {
+pub fn init_single<const N: usize>(input: &MultArray<AtomicU64, N>, temp: &[BlockInfo], output: &MultArray<AtomicU64, N>) -> Task {
   reset(temp);
   create_task(input, temp, output)
 }
 
-fn create_task<const N: usize>(input_m: &MultArray<N>, temp: &[BlockInfo], output_m: &MultArray<N>) -> Task {
+fn create_task<const N: usize>(input_m: &MultArray<AtomicU64, N>, temp: &[BlockInfo], output_m: &MultArray<AtomicU64, N>) -> Task {
   let inner_size = input_m.get_inner_size() as u64;
   let inner_rows = input_m.total_inner_count() as u64;
   let input = input_m.get_data();

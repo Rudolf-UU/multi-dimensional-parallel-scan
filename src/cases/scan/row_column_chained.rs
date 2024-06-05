@@ -23,7 +23,7 @@ pub const STATE_INITIALIZED: u64 = 0;
 pub const STATE_AGGREGATE_AVAILABLE: u64 = 1;
 pub const STATE_PREFIX_AVAILABLE: u64 = 2;
 
-pub fn create_temp<const N: usize>(input: &MultArray<N>) -> Box<[BlockInfo]> {
+pub fn create_temp<const N: usize>(input: &MultArray<AtomicU64, N>) -> Box<[BlockInfo]> {
   (0 .. ((input.get_inner_size() as u64 + BLOCK_SIZE - 1) / BLOCK_SIZE) * input.total_inner_count() as u64).map(|_| BlockInfo{
     state: AtomicU64::new(STATE_INITIALIZED), aggregate: AtomicU64::new(0), prefix: AtomicU64::new(0)
   }).collect()
@@ -37,12 +37,12 @@ pub fn reset(temp: &[BlockInfo]) {
   }
 }
 
-pub fn init_single<const N: usize>(input: &MultArray<N>, temp: &[BlockInfo], output: &MultArray<N>) -> Task {
+pub fn init_single<const N: usize>(input: &MultArray<AtomicU64, N>, temp: &[BlockInfo], output: &MultArray<AtomicU64, N>) -> Task {
   reset(temp);
   create_task(input, temp, output)
 }
 
-fn create_task<const N: usize>(input_m: &MultArray<N>, temp: &[BlockInfo], output_m: &MultArray<N>) -> Task {
+fn create_task<const N: usize>(input_m: &MultArray<AtomicU64, N>, temp: &[BlockInfo], output_m: &MultArray<AtomicU64, N>) -> Task {
   let inner_size = input_m.get_inner_size() as u64;
   let inner_rows = input_m.total_inner_count() as u64;
   let input = input_m.get_data();

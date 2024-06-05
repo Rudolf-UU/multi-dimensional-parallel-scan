@@ -12,13 +12,15 @@ fn main() {
     println!("Running the benchmarks without the C++ implementations.");
   }
 
-  //affinity::set_thread_affinity([thread_pinning::AFFINITY_MAPPING[0]]).unwrap();
+  // affinity::set_thread_affinity([thread_pinning::AFFINITY_MAPPING[0]]).unwrap();
 
+  cases::scan::run_rowwise_vs_columnwise();
+  cases::scan::run_custom_shape(cases::scan::HIGHERDIM_SHAPE);
+  cases::scan::run_custom_shape(cases::scan::FOURDIM_SHAPE);
   cases::scan::run(cpp_enabled);
   cases::scan::run_multidim(cpp_enabled);
   cases::scan::run_inplace(cpp_enabled);
   cases::scan::run_inplace_multidim(cpp_enabled);
-  //cases::compact::run(cpp_enabled);
 }
 
 // Utility to install and build the c++ implementation.

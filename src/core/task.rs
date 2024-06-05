@@ -57,7 +57,7 @@ impl Task {
       finish,
       work_size,
       active_threads: AtomicI32::new(0),
-      work_index: AtomicU32::new(if work_two_sided { 0 } else { 1 }),
+      work_index: AtomicU32::new(if work_two_sided { 1 << 16 } else { 1 }),
       work_two_sided,
       data
     });

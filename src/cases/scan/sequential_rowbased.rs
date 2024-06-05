@@ -11,7 +11,7 @@ struct Data<'a> {
   inner_size: u64
 }
 
-pub fn create_task<const N: usize>(input_m: &MultArray<N>, output_m: &MultArray<N>) -> Task {
+pub fn create_task<const N: usize>(input_m: &MultArray<AtomicU64, N>, output_m: &MultArray<AtomicU64, N>) -> Task {
   let inner_size = input_m.get_inner_size();
   let inner_rows = input_m.total_inner_count();
   let input = input_m.get_data();
@@ -21,6 +21,7 @@ pub fn create_task<const N: usize>(input_m: &MultArray<N>, output_m: &MultArray<
 }
 
 fn run(_workers: &Workers, task: *const TaskObject<Data>, loop_arguments: LoopArguments) {
+    // Sequentially scan the row(s) within the block
     let data = unsafe { TaskObject::get_data(task) };
 
     workassisting_loop!(loop_arguments, |block_index| {
