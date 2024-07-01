@@ -1,0 +1,10 @@
+\begin{tabular}{clrrrrrrr}
+\toprule
+\multicolumn{2}{c}{\textbf{Number of threads}} & \multicolumn{1}{c}{\textbf{ 1 }} & \multicolumn{1}{c}{\textbf{ 2 }} & \multicolumn{1}{c}{\textbf{ 3 }} & \multicolumn{1}{c}{\textbf{ 4 }} & \multicolumn{1}{c}{\textbf{ 6 }} & \multicolumn{2}{c}{\textbf{ 8 } \dots \textbf{ 16 }} \\
+\midrule
+& Sequential (Rust) & \multicolumn{1}{r}{ 1.00 } & \multicolumn{ 6 }{l}{(35 ms)} \\
+& Sequential (C++) & \multicolumn{1}{r}{ 0.98 } & \multicolumn{ 6 }{l}{(36 ms)} \\
+\rowcolor{gnuplot7!10}$\color{gnuplot7}{\scalebox{1.1}{$\bullet$}}$ & Adaptive chained & \cellcolor{gnuplot7!10} 0.99 & \cellcolor{gnuplot7!10} 1.30 & \cellcolor{gnuplot7!10} 1.69 & \cellcolor{gnuplot7!10} 1.90 & \cellcolor{gnuplot7!10} 2.05 & \cellcolor{gnuplot7!10} 2.12 & \cellcolor{gnuplot7!10} 2.25 \\
+\rowcolor{gnuplot6!30}$\color{gnuplot6}{\scalebox{1.1}{$\circ$}}$ & \textit{Assisting column-wise chained} & \cellcolor{gnuplot6!30} 0.99 & \cellcolor{gnuplot6!30} 1.31 & \cellcolor{gnuplot6!30} 1.71 & \cellcolor{gnuplot6!30} 1.91 & \cellcolor{gnuplot6!30} 2.07 & \cellcolor{gnuplot6!30} 2.13 & \cellcolor{gnuplot6!30} 2.24 \\
+\bottomrule
+\end{tabular}

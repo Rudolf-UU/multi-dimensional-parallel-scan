@@ -1,0 +1,17 @@
+# Benchmark In-place prefix-sum (n = 67,108,864)
+# Speedup compared to a sequential implementation.
+# NCPU	Adaptive chained	Assisting column-wise chained
+1	0.9874063	0.9865363
+2	1.2990248	1.3077008
+3	1.6947782	1.712763
+4	1.9023626	1.910681
+6	2.049125	2.0727136
+8	2.123067	2.1306417
+10	2.1894898	2.162924
+12	2.161228	2.143387
+14	2.1836188	2.2120633
+16	2.2457538	2.243785
+20		
+24		
+28		
+32		

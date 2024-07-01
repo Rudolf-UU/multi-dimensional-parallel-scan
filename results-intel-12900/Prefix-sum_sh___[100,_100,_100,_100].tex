@@ -1,0 +1,11 @@
+\begin{tabular}{clrrrrrrr}
+\toprule
+\multicolumn{2}{c}{\textbf{Number of threads}} & \multicolumn{1}{c}{\textbf{ 1 }} & \multicolumn{1}{c}{\textbf{ 2 }} & \multicolumn{1}{c}{\textbf{ 3 }} & \multicolumn{1}{c}{\textbf{ 4 }} & \multicolumn{1}{c}{\textbf{ 6 }} & \multicolumn{2}{c}{\textbf{ 8 } \dots \textbf{ 16 }} \\
+\midrule
+& Sequential (Rust) & \multicolumn{1}{r}{ 1.00 } & \multicolumn{ 6 }{l}{(69 ms)} \\
+\rowcolor{gnuplot5!10}$\color{gnuplot5}{\blacksquare}$ & Sequential row-based & \cellcolor{gnuplot5!10} 0.89 & \cellcolor{gnuplot5!10} 0.71 & \cellcolor{gnuplot5!10} 0.79 & \cellcolor{gnuplot5!10} 0.88 & \cellcolor{gnuplot5!10} 1.04 & \cellcolor{gnuplot5!10} 1.14 & \cellcolor{gnuplot5!10} 1.23 \\
+\rowcolor{gnuplot7!30}$\color{gnuplot7}{\scalebox{1.1}{$\bullet$}}$ & \textit{Column-wise chained} & \cellcolor{gnuplot7!30} 0.88 & \cellcolor{gnuplot7!30} 0.68 & \cellcolor{gnuplot7!30} 0.75 & \cellcolor{gnuplot7!30} 0.83 & \cellcolor{gnuplot7!30} 0.98 & \cellcolor{gnuplot7!30} 1.05 & \cellcolor{gnuplot7!30} 1.22 \\
+\rowcolor{gnuplot8!30}$\color{gnuplot8}{\triangle}$ & \textit{Row-wise chained} & \cellcolor{gnuplot8!30} 0.69 & \cellcolor{gnuplot8!30} 0.62 & \cellcolor{gnuplot8!30} 0.63 & \cellcolor{gnuplot8!30} 0.73 & \cellcolor{gnuplot8!30} 0.89 & \cellcolor{gnuplot8!30} 0.95 & \cellcolor{gnuplot8!30} 1.06 \\
+\rowcolor{gnuplot6!30}$\color{gnuplot6}{\scalebox{1.1}{$\circ$}}$ & \textit{Assisting column-wise chained} & \cellcolor{gnuplot6!30} 0.96 & \cellcolor{gnuplot6!30} 1.40 & \cellcolor{gnuplot6!30} 1.76 & \cellcolor{gnuplot6!30} 2.14 & \cellcolor{gnuplot6!30} 2.49 & \cellcolor{gnuplot6!30} 2.52 & \cellcolor{gnuplot6!30} 2.38 \\
+\bottomrule
+\end{tabular}
